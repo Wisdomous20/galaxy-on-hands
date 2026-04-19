@@ -21,13 +21,31 @@ export interface InteractPoint {
 const INTERACT_RADIUS = 90;
 const INTERACT_FORCE = 2.2;
 
-const STAR_COLORS = [
-  "#ffffff",
-  "#b4a0ff",
-  "#78c8ff",
-  "#ffc896",
-  "#c8b4ff",
+// Realistic star color distribution: most are white/blue-white, 
+// some are yellow, a few are orange/red giants.
+const STAR_COLORS_WEIGHTED: { color: string; weight: number }[] = [
+  { color: "#ffffff", weight: 30 },
+  { color: "#f0f0ff", weight: 20 },
+  { color: "#d0d8ff", weight: 15 },
+  { color: "#a0b8ff", weight: 10 },
+  { color: "#78a0ff", weight: 5 },
+  { color: "#fff8e0", weight: 8 },
+  { color: "#ffe8b0", weight: 5 },
+  { color: "#ffd080", weight: 3 },
+  { color: "#ffb060", weight: 2 },
+  { color: "#ff8848", weight: 1 },
+  { color: "#ff6030", weight: 1 },
 ];
+
+function pickStarColor(): string {
+  const totalWeight = STAR_COLORS_WEIGHTED.reduce((s, c) => s + c.weight, 0);
+  let r = Math.random() * totalWeight;
+  for (const entry of STAR_COLORS_WEIGHTED) {
+    r -= entry.weight;
+    if (r <= 0) return entry.color;
+  }
+  return "#ffffff";
+}
 
 export class Starfield {
   private stars: Star[] = [];
@@ -35,23 +53,31 @@ export class Starfield {
   private width: number;
   private height: number;
 
-  constructor(width: number, height: number, count = 400) {
+  constructor(width: number, height: number, count = 600) {
     this.width = width;
     this.height = height;
     for (let i = 0; i < count; i++) {
       const depth = Math.random();
       const angle = Math.random() * Math.PI * 2;
-      const speed = (0.05 + depth * 0.45) * 0.6;
+      const speed = (0.03 + depth * 0.35) * 0.5;
       const vx = Math.cos(angle) * speed;
       const vy = Math.sin(angle) * speed;
+
+      // Most stars are tiny points; a few are brighter/larger
+      const isBright = Math.random() < 0.05;
+
       this.stars.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        radius: 0.3 + depth * 1.8,
-        opacity: 0.3 + depth * 0.6,
-        twinkleSpeed: Math.random() * 0.03 + 0.01,
+        radius: isBright
+          ? 1.2 + Math.random() * 1.5
+          : 0.2 + depth * 1.2,
+        opacity: isBright
+          ? 0.7 + Math.random() * 0.3
+          : 0.15 + depth * 0.55,
+        twinkleSpeed: Math.random() * 0.03 + 0.008,
         twinkleOffset: Math.random() * Math.PI * 2,
-        color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
+        color: pickStarColor(),
         vx,
         vy,
         baseVx: vx,
@@ -69,11 +95,10 @@ export class Starfield {
     if (alpha <= 0) return;
 
     this.frame++;
-    const drift = Math.sin(this.frame * 0.002) * 0.3;
+    const drift = Math.sin(this.frame * 0.0015) * 0.2;
     const r2 = INTERACT_RADIUS * INTERACT_RADIUS;
 
     for (const star of this.stars) {
-      // Repulsion from hand points
       for (const p of interactPoints) {
         const dx = star.x - p.x;
         const dy = star.y - p.y;
@@ -87,7 +112,6 @@ export class Starfield {
         }
       }
 
-      // Damp back toward base drift velocity
       star.vx += (star.baseVx - star.vx) * 0.06;
       star.vy += (star.baseVy - star.vy) * 0.06;
 
@@ -108,11 +132,12 @@ export class Starfield {
       ctx.globalAlpha = star.opacity * twinkle * alpha;
       ctx.fill();
 
+      // Soft glow halo on brighter stars
       if (star.radius > 1.2) {
         ctx.beginPath();
-        ctx.arc(star.x, star.y, star.radius * 3, 0, Math.PI * 2);
+        ctx.arc(star.x, star.y, star.radius * 3.5, 0, Math.PI * 2);
         ctx.fillStyle = star.color;
-        ctx.globalAlpha = star.opacity * twinkle * alpha * 0.1;
+        ctx.globalAlpha = star.opacity * twinkle * alpha * 0.08;
         ctx.fill();
       }
     }

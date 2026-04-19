@@ -6,6 +6,8 @@ import { useCanvasDrawing } from "../hooks/useCanvasDrawing";
 import { getAverageOpenness } from "../lib/handGestures";
 import { HandCanvas } from "./HandCanvas";
 import { UiOverlay } from "./UI-Overlay";
+import { PlanetInfoPanel } from "./PlanetInfoPanel";
+import type { PlanetInfo } from "../lib/planets";
 
 const WIDTH = 1280;
 const HEIGHT = 720;
@@ -13,7 +15,10 @@ const HEIGHT = 720;
 export function GalaxyHands() {
   const [handsDetected, setHandsDetected] = useState(0);
   const [openness, setOpenness] = useState(0);
-  const { canvasRef, draw } = useCanvasDrawing(WIDTH, HEIGHT);
+  const [selectedPlanet, setSelectedPlanet] = useState<PlanetInfo | null>(null);
+  const { canvasRef, draw, hitTestPlanet } = useCanvasDrawing(WIDTH, HEIGHT, {
+    onPlanetTouch: (info) => setSelectedPlanet(info),
+  });
 
   const { videoRef, active, error, scriptLoaded, start } = useHandTracking(
     (result) => {
@@ -50,8 +55,18 @@ export function GalaxyHands() {
       )}
 
       <video ref={videoRef} autoPlay playsInline className="hidden" />
-      <HandCanvas ref={canvasRef} width={WIDTH} height={HEIGHT} visible={active} />
+      <HandCanvas
+        ref={canvasRef}
+        width={WIDTH}
+        height={HEIGHT}
+        visible={active}
+        onClick={(e) => {
+          const hit = hitTestPlanet(e.clientX, e.clientY);
+          setSelectedPlanet(hit);
+        }}
+      />
       <UiOverlay active={active} handsDetected={handsDetected} openness={openness} />
+      <PlanetInfoPanel info={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
     </main>
   );
 }

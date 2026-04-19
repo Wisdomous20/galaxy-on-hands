@@ -6,16 +6,20 @@ interface HandCanvasProps {
   width: number;
   height: number;
   visible: boolean;
+  onClick?: (e: React.MouseEvent<HTMLCanvasElement>) => void;
 }
 
 export const HandCanvas = forwardRef<HTMLCanvasElement, HandCanvasProps>(
-  function HandCanvas({ width, height, visible }, ref) {
+  function HandCanvas({ width, height, visible, onClick }, ref) {
     return (
       <canvas
         ref={ref}
         width={width}
         height={height}
-        className={`w-full h-full object-cover ${visible ? "block" : "hidden"}`}
+        onClick={onClick}
+        className={`w-full h-full object-cover cursor-pointer ${
+          visible ? "block" : "hidden"
+        }`}
       />
     );
   }

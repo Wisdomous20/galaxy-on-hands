@@ -5,7 +5,7 @@ import { FINGER_CONNECTIONS } from "../lib/handConnections";
 import { Starfield, type InteractPoint } from "../lib/starfield";
 import { Galaxy } from "../lib/galaxy";
 import { Nebula } from "../lib/nebula";
-import { Planets } from "../lib/planets";
+import { Planets, type PlanetInfo } from "../lib/planets";
 import { getAverageOpenness, allFists } from "../lib/handGestures";
 import type { HandTrackingResult } from "../types/hand";
 
@@ -20,7 +20,18 @@ const GALAXY_COLORS = [
 const OPEN_THRESHOLD = 0.35;
 const CLOSE_FRAMES_REQUIRED = 18;
 
-export function useCanvasDrawing(width: number, height: number) {
+interface Options {
+  onPlanetTouch?: (info: PlanetInfo) => void;
+}
+
+export function useCanvasDrawing(
+  width: number,
+  height: number,
+  options: Options = {}
+) {
+  const { onPlanetTouch } = options;
+  const lastTouchedRef = useRef<string | null>(null);
+  const touchFramesRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trailCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const starfieldRef = useRef<Starfield | null>(null);
@@ -68,6 +79,19 @@ export function useCanvasDrawing(width: number, height: number) {
     }
     return planetsRef.current;
   }, [width, height]);
+
+  const hitTestPlanet = useCallback(
+    (clientX: number, clientY: number): PlanetInfo | null => {
+      const canvas = canvasRef.current;
+      const planets = planetsRef.current;
+      if (!canvas || !planets) return null;
+      const rect = canvas.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * width;
+      const y = ((clientY - rect.top) / rect.height) * height;
+      return planets.hitTest(x, y);
+    },
+    [width, height]
+  );
 
   const draw = useCallback(
     (result: HandTrackingResult) => {
@@ -199,12 +223,42 @@ export function useCanvasDrawing(width: number, height: number) {
       // Planets float in front of stars (pushable by hands)
       planets.draw(ctx, eased, interactPoints);
 
+      // Fingertip hover → open planet info (dwell ~10 frames to avoid flicker)
+      if (eased > 0.5 && onPlanetTouch) {
+        let hovered: PlanetInfo | null = null;
+        for (const hand of result.hands) {
+          const tip = hand[8]; // index fingertip
+          if (!tip) continue;
+          const tx = (1 - tip.x) * width;
+          const ty = tip.y * height;
+          const hit = planets.hitTest(tx, ty);
+          if (hit) {
+            hovered = hit;
+            break;
+          }
+        }
+        if (hovered) {
+          if (hovered.name === lastTouchedRef.current) {
+            touchFramesRef.current += 1;
+          } else {
+            lastTouchedRef.current = hovered.name;
+            touchFramesRef.current = 1;
+          }
+          if (touchFramesRef.current === 10) {
+            onPlanetTouch(hovered);
+          }
+        } else {
+          lastTouchedRef.current = null;
+          touchFramesRef.current = 0;
+        }
+      }
+
       // Hand lines always on top
       ctx.drawImage(trail, 0, 0);
     },
-    [width, height, getTrailCanvas, getStarfield, getGalaxy, getNebula, getPlanets]
+    [width, height, getTrailCanvas, getStarfield, getGalaxy, getNebula, getPlanets, onPlanetTouch]
 
   );
 
-  return { canvasRef, draw };
+  return { canvasRef, draw, hitTestPlanet };
 }
