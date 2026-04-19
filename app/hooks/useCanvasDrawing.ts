@@ -3,6 +3,9 @@
 import { useRef, useCallback } from "react";
 import { FINGER_CONNECTIONS } from "../lib/handConnections";
 import { Starfield, type InteractPoint } from "../lib/starfield";
+import { Galaxy } from "../lib/galaxy";
+import { Nebula } from "../lib/nebula";
+import { Planets } from "../lib/planets";
 import { getAverageOpenness, allFists } from "../lib/handGestures";
 import type { HandTrackingResult } from "../types/hand";
 
@@ -21,6 +24,9 @@ export function useCanvasDrawing(width: number, height: number) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trailCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const starfieldRef = useRef<Starfield | null>(null);
+  const galaxyRef = useRef<Galaxy | null>(null);
+  const nebulaRef = useRef<Nebula | null>(null);
+  const planetsRef = useRef<Planets | null>(null);
   const isGalaxyRef = useRef(false);
   const transitionRef = useRef(0); // 0 = video, 1 = galaxy
   const closeFramesRef = useRef(0);
@@ -42,6 +48,27 @@ export function useCanvasDrawing(width: number, height: number) {
     return starfieldRef.current;
   }, [width, height]);
 
+  const getGalaxy = useCallback(() => {
+    if (!galaxyRef.current) {
+      galaxyRef.current = new Galaxy(1600);
+    }
+    return galaxyRef.current;
+  }, []);
+
+  const getNebula = useCallback(() => {
+    if (!nebulaRef.current) {
+      nebulaRef.current = new Nebula(width, height);
+    }
+    return nebulaRef.current;
+  }, [width, height]);
+
+  const getPlanets = useCallback(() => {
+    if (!planetsRef.current) {
+      planetsRef.current = new Planets(width, height);
+    }
+    return planetsRef.current;
+  }, [width, height]);
+
   const draw = useCallback(
     (result: HandTrackingResult) => {
       const ctx = canvasRef.current?.getContext("2d");
@@ -52,6 +79,9 @@ export function useCanvasDrawing(width: number, height: number) {
       if (!trailCtx) return;
 
       const starfield = getStarfield();
+      const galaxy = getGalaxy();
+      const nebula = getNebula();
+      const planets = getPlanets();
 
       // --- Binary gesture detection ---
       const openness = getAverageOpenness(result.hands);
@@ -151,13 +181,28 @@ export function useCanvasDrawing(width: number, height: number) {
         }
       }
 
-      // Starfield always advances (so it's always moving); alpha fades in
+      // Nebula clouds fade in behind everything
+      nebula.draw(ctx, eased);
+
+      // Giant tilted 3D spiral galaxy as the backdrop
+      galaxy.draw(
+        ctx,
+        width / 2,
+        height * 0.55,
+        Math.min(width, height) * 0.55,
+        eased
+      );
+
+      // Foreground drifting / interactive stars
       starfield.draw(ctx, eased, interactPoints);
+
+      // Planets float in front of stars (pushable by hands)
+      planets.draw(ctx, eased, interactPoints);
 
       // Hand lines always on top
       ctx.drawImage(trail, 0, 0);
     },
-    [width, height, getTrailCanvas, getStarfield]
+    [width, height, getTrailCanvas, getStarfield, getGalaxy, getNebula, getPlanets]
 
   );
 
