@@ -2,6 +2,8 @@
 
 import { useRef, useCallback } from "react";
 import { FINGER_CONNECTIONS } from "../lib/handConnections";
+import { Starfield, type InteractPoint } from "../lib/starfield";
+import { getAverageOpenness, allFists } from "../lib/handGestures";
 import type { HandTrackingResult } from "../types/hand";
 
 const GALAXY_COLORS = [
@@ -11,11 +13,18 @@ const GALAXY_COLORS = [
   "rgba(255, 200, 150,",
 ];
 
+// Open hand enters galaxy; sustained fist (all fingers curled) exits.
+const OPEN_THRESHOLD = 0.35;
+const CLOSE_FRAMES_REQUIRED = 18;
+
 export function useCanvasDrawing(width: number, height: number) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trailCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const starfieldRef = useRef<Starfield | null>(null);
+  const isGalaxyRef = useRef(false);
+  const transitionRef = useRef(0); // 0 = video, 1 = galaxy
+  const closeFramesRef = useRef(0);
 
-  // Lazy-create an offscreen canvas for the trail effect
   const getTrailCanvas = useCallback(() => {
     if (!trailCanvasRef.current) {
       const offscreen = document.createElement("canvas");
@@ -24,6 +33,13 @@ export function useCanvasDrawing(width: number, height: number) {
       trailCanvasRef.current = offscreen;
     }
     return trailCanvasRef.current;
+  }, [width, height]);
+
+  const getStarfield = useCallback(() => {
+    if (!starfieldRef.current) {
+      starfieldRef.current = new Starfield(width, height);
+    }
+    return starfieldRef.current;
   }, [width, height]);
 
   const draw = useCallback(
@@ -35,18 +51,44 @@ export function useCanvasDrawing(width: number, height: number) {
       const trailCtx = trail.getContext("2d");
       if (!trailCtx) return;
 
-      // --- Trail layer ---
-      // Fade the previous frame slightly instead of clearing it
-trailCtx.globalCompositeOperation = "destination-in";
-trailCtx.fillStyle = "rgba(0, 0, 0, 0.85)";
-trailCtx.fillRect(0, 0, width, height);
-trailCtx.globalCompositeOperation = "source-over";
+      const starfield = getStarfield();
 
-      // Draw connections onto the trail canvas
+      // --- Binary gesture detection ---
+      const openness = getAverageOpenness(result.hands);
+
+      if (result.hands.length > 0) {
+        if (openness > OPEN_THRESHOLD) {
+          isGalaxyRef.current = true;
+          closeFramesRef.current = 0;
+        } else if (allFists(result.hands)) {
+          closeFramesRef.current += 1;
+          if (closeFramesRef.current >= CLOSE_FRAMES_REQUIRED) {
+            isGalaxyRef.current = false;
+          }
+        } else {
+          // Pointing, partial, moving — doesn't count as closed.
+          closeFramesRef.current = 0;
+        }
+      } else {
+        closeFramesRef.current = 0;
+      }
+
+      // Smooth transition toward target (0 = video, 1 = galaxy)
+      const target = isGalaxyRef.current ? 1 : 0;
+      transitionRef.current += (target - transitionRef.current) * 0.08;
+      const t = transitionRef.current;
+      // Ease for visual weight
+      const eased = t * t * (3 - 2 * t);
+
+      // --- Trail layer ---
+      trailCtx.globalCompositeOperation = "destination-in";
+      trailCtx.fillStyle = "rgba(0, 0, 0, 0.85)";
+      trailCtx.fillRect(0, 0, width, height);
+      trailCtx.globalCompositeOperation = "source-over";
+
       result.hands.forEach((hand, handIndex) => {
         const colorBase = GALAXY_COLORS[handIndex % GALAXY_COLORS.length];
 
-        // Glow effect via shadow
         trailCtx.shadowColor = `${colorBase} 0.5)`;
         trailCtx.shadowBlur = 12;
 
@@ -67,7 +109,6 @@ trailCtx.globalCompositeOperation = "source-over";
           trailCtx.stroke();
         }
 
-        // Joint dots with stronger glow
         trailCtx.shadowBlur = 8;
         for (const point of hand) {
           const x = (1 - point.x) * width;
@@ -82,21 +123,42 @@ trailCtx.globalCompositeOperation = "source-over";
         trailCtx.shadowBlur = 0;
       });
 
-      // --- Main canvas compositing ---
-      ctx.clearRect(0, 0, width, height);
+      // --- Main canvas ---
 
-      // Dimmed video background
-      ctx.save();
-      ctx.scale(-1, 1);
-      ctx.globalAlpha = 0.6;
-      ctx.drawImage(result.image, -width, 0, width, height);
-      ctx.globalAlpha = 1;
-      ctx.restore();
+      // Always start with pure black
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, width, height);
 
-      // Overlay the trail canvas
+      // Video layer (fades out as we enter galaxy mode)
+      if (eased < 0.99) {
+        ctx.save();
+        ctx.globalAlpha = 1 - eased;
+        ctx.scale(-1, 1);
+        ctx.drawImage(result.image, -width, 0, width, height);
+        ctx.restore();
+      }
+
+      // Build interaction points from hand landmarks (only when in galaxy)
+      const interactPoints: InteractPoint[] = [];
+      if (eased > 0.05) {
+        for (const hand of result.hands) {
+          for (const p of hand) {
+            interactPoints.push({
+              x: (1 - p.x) * width,
+              y: p.y * height,
+            });
+          }
+        }
+      }
+
+      // Starfield always advances (so it's always moving); alpha fades in
+      starfield.draw(ctx, eased, interactPoints);
+
+      // Hand lines always on top
       ctx.drawImage(trail, 0, 0);
     },
-    [width, height, getTrailCanvas]
+    [width, height, getTrailCanvas, getStarfield]
+
   );
 
   return { canvasRef, draw };

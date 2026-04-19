@@ -3,47 +3,55 @@
 import { useState } from "react";
 import { useHandTracking } from "../hooks/useHandTracking";
 import { useCanvasDrawing } from "../hooks/useCanvasDrawing";
+import { getAverageOpenness } from "../lib/handGestures";
 import { HandCanvas } from "./HandCanvas";
+import { UiOverlay } from "./UI-Overlay";
 
-const WIDTH = 640;
-const HEIGHT = 480;
+const WIDTH = 1280;
+const HEIGHT = 720;
 
 export function GalaxyHands() {
   const [handsDetected, setHandsDetected] = useState(0);
+  const [openness, setOpenness] = useState(0);
   const { canvasRef, draw } = useCanvasDrawing(WIDTH, HEIGHT);
 
   const { videoRef, active, error, scriptLoaded, start } = useHandTracking(
     (result) => {
       setHandsDetected(result.hands.length);
+      setOpenness(getAverageOpenness(result.hands));
       draw(result);
     }
   );
 
   return (
-    <main className="flex flex-col items-center justify-center h-screen bg-[#0a0a0f]">
+    <main className="relative w-screen h-screen bg-[#0a0a0f] overflow-hidden">
       {!active && !error && (
-        <button
-          onClick={start}
-          disabled={!scriptLoaded}
-          className="px-8 py-3 border border-white/10 text-white/50 
-                     font-mono text-sm tracking-widest uppercase
-                     hover:bg-white/5 hover:border-white/20 transition-all
-                     disabled:opacity-30 disabled:cursor-wait"
-        >
-          {scriptLoaded ? "Enable Camera" : "Loading ML Model..."}
-        </button>
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+          <h1 className="font-mono text-sm tracking-[0.2em] uppercase text-white/40 mb-6">
+            Galaxy Hands
+          </h1>
+          <button
+            onClick={start}
+            disabled={!scriptLoaded}
+            className="px-8 py-3 border border-white/10 text-white/50 
+                       font-mono text-xs tracking-widest uppercase
+                       hover:bg-white/5 hover:border-white/20 transition-all
+                       disabled:opacity-30 disabled:cursor-wait"
+          >
+            {scriptLoaded ? "Enable Camera" : "Loading ML Model..."}
+          </button>
+        </div>
       )}
 
-      {error && <p className="text-red-400 font-mono text-sm">{error}</p>}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center z-20">
+          <p className="text-red-400 font-mono text-sm">{error}</p>
+        </div>
+      )}
 
       <video ref={videoRef} autoPlay playsInline className="hidden" />
       <HandCanvas ref={canvasRef} width={WIDTH} height={HEIGHT} visible={active} />
-
-      {active && (
-        <p className="mt-4 font-mono text-xs text-white/30">
-          hands: {handsDetected}
-        </p>
-      )}
+      <UiOverlay active={active} handsDetected={handsDetected} openness={openness} />
     </main>
   );
 }

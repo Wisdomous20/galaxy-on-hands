@@ -3,21 +3,20 @@
 interface UiOverlayProps {
   active: boolean;
   handsDetected: number;
+  openness?: number;
 }
 
-export function UiOverlay({ active, handsDetected }: UiOverlayProps) {
+export function UiOverlay({ active, handsDetected, openness = 0 }: UiOverlayProps) {
   if (!active) return null;
 
   return (
     <div className="fixed inset-0 pointer-events-none z-10">
-      {/* Top bar */}
       <div className="flex justify-between items-start px-8 pt-6">
         <span className="font-mono text-[11px] tracking-[0.18em] uppercase text-white/30">
           Galaxy Hands
         </span>
       </div>
 
-      {/* Bottom bar */}
       <div className="absolute bottom-6 left-8 right-8 flex justify-between items-end">
         <div className="flex items-center gap-2">
           <div
@@ -34,8 +33,8 @@ export function UiOverlay({ active, handsDetected }: UiOverlayProps) {
           </span>
         </div>
 
-        <span className="font-mono text-[11px] text-white/15">
-          move hands to create constellations
+        <span className="font-mono text-[11px] text-white/30">
+          openness {openness.toFixed(2)} · open hands → galaxy
         </span>
       </div>
     </div>
