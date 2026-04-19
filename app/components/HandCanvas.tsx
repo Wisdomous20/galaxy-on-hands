@@ -15,7 +15,7 @@ export const HandCanvas = forwardRef<HTMLCanvasElement, HandCanvasProps>(
         ref={ref}
         width={width}
         height={height}
-        className={`rounded-lg border border-white/10 ${visible ? "block" : "hidden"}`}
+        className={`w-full h-full object-cover ${visible ? "block" : "hidden"}`}
       />
     );
   }

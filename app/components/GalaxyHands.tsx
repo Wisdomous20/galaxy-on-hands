@@ -41,7 +41,7 @@ export function GalaxyHands() {
 
       {active && (
         <p className="mt-4 font-mono text-xs text-white/30">
-          hands detected: {handsDetected}
+          hands: {handsDetected}
         </p>
       )}
     </main>
